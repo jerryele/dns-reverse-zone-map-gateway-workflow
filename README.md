@@ -29,6 +29,11 @@ alongside the "virtual" nodes that only exist via a Network's role assignment.
     deployment role, so nothing in it can ever get a working PTR.
   - **Missing / wrong PTR** — the same underlying problem from the host's point of view: an
     individual Host Record has reverse DNS enabled, but its network has no active role.
+- **API Calls panel** (bottom of the page, collapsed by default) — every BAM REST v2 call made
+  to build the current view, in order, with its path/params, result count, and duration. The
+  interaction with BAM isn't a black box; you can see exactly what was fetched (and, for larger
+  configurations, exactly why a refresh took as long as it did — one deployment-role lookup per
+  network adds up).
 
 No write/fix actions are implemented in this version — see "Limitations."
 

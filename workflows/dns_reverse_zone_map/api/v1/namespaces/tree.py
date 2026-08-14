@@ -108,6 +108,7 @@ class Debug(Resource):
                     result["resource_records_sample_for_that_zone"] = client.http_get(
                         "/zones/{}/resourceRecords".format(zone_id), params={"limit": 10}
                     )
+            result["api_calls"] = client.calls
             return result, 200
         except Exception as e:
             return {"error": str(e)}, 500

@@ -34,6 +34,8 @@ Endpoint/field grounding:
   docs - ACTIVE_DNS_ROLE_TYPES in constants.py is the best-guess "actively serving" subset;
   confirm it against your own BAM's real values (see README).
 """
+import time
+
 from flask import g
 
 from bluecat_libraries.address_manager.apiv2.client import Client
@@ -43,13 +45,41 @@ from ..utils.constants import ACTIVE_DNS_ROLE_TYPES
 PAGE_SIZE = 500
 
 
+class LoggingClient:
+    """
+    Thin wrapper around a BAM v2 client that records every `http_get` call (path, params,
+    result count, duration) into `.calls`, so the UI can show the real API interaction
+    behind a page load instead of it being an opaque black box. Everything else is
+    delegated straight through to the wrapped client unchanged.
+    """
+
+    def __init__(self, client):
+        self._client = client
+        self.calls = []
+
+    def http_get(self, path, params=None, **kwargs):
+        started = time.time()
+        response = self._client.http_get(path, params=params, **kwargs)
+        result_count = len(response["data"]) if isinstance(response, dict) and "data" in response else None
+        self.calls.append({
+            "method": "GET",
+            "path": path,
+            "params": params or {},
+            "result_count": result_count,
+            "duration_ms": int((time.time() - started) * 1000),
+        })
+        return response
+
+    def __getattr__(self, name):
+        return getattr(self._client, name)
+
+
 def get_v2_client():
     existing = getattr(getattr(g.user, "bam_api", None), "v2", None)
-    if existing is not None:
-        return existing
-    client = Client(url=g.user.get_api_netloc(), verify=False)
-    client.auth = "Basic " + g.user.session_auth
-    return client
+    raw_client = existing if existing is not None else Client(url=g.user.get_api_netloc(), verify=False)
+    if existing is None:
+        raw_client.auth = "Basic " + g.user.session_auth
+    return LoggingClient(raw_client)
 
 
 def _paginate(client, path: str, fields: str, filter_expr: str) -> list:

@@ -257,6 +257,22 @@
           </div>
         </section>
       </div>
+
+      <section class="panel" id="apiCallsPanel" style="margin-top:16px;">
+        <div class="panel-header">
+          <h2>API Calls <span class="badge badge-count" id="countApiCalls">0</span></h2>
+          <div class="actions">
+            <button class="action" id="toggleApiCallsBtn">Show</button>
+          </div>
+        </div>
+        <p class="hint">Every BAM REST v2 call made to build the view above, in the order they ran.</p>
+        <div id="apiCallsBody" style="display:none;">
+          <table>
+            <thead><tr><th style="width:8%;">Method</th><th style="width:60%;">Path</th><th style="width:12%;">Results</th><th>Time</th></tr></thead>
+            <tbody id="apiCallsTableBody"></tbody>
+          </table>
+        </div>
+      </section>
     </main>
   </div>
 
@@ -734,6 +750,25 @@
       });
   }
 
+  function renderApiCalls(calls) {
+    document.getElementById("countApiCalls").textContent = calls.length;
+    var body = document.getElementById("apiCallsTableBody");
+    body.innerHTML = "";
+    calls.forEach(function (call) {
+      var params = call.params || {};
+      var query = Object.keys(params)
+        .map(function (k) { return k + "=" + params[k]; })
+        .join("&");
+      var fullPath = call.path + (query ? "?" + query : "");
+      var tr = document.createElement("tr");
+      tr.innerHTML = "<td>" + escapeHtml(call.method) + "</td>" +
+        '<td class="mono">' + escapeHtml(fullPath) + "</td>" +
+        "<td>" + (call.result_count == null ? "-" : call.result_count) + "</td>" +
+        "<td>" + call.duration_ms + " ms</td>";
+      body.appendChild(tr);
+    });
+  }
+
   function loadSnapshot() {
     var configuration = document.getElementById("configSelect").value;
     if (!configuration) return;
@@ -746,6 +781,7 @@
         renderTree(lastTreeRoot);
         renderTable(lastTreeRoot);
         renderIssues(result.data.issues);
+        renderApiCalls(result.data.api_calls || []);
         document.getElementById("lastUpdated").textContent = new Date().toLocaleTimeString();
       })
       .catch(function (e) {
@@ -768,6 +804,12 @@
     list.style.display = showing ? "none" : "";
     var count = list.querySelectorAll(".ptr-row").length;
     btn.innerHTML = (showing ? "&#9656; " : "&#9662; ") + count + " PTR";
+  });
+  document.getElementById("toggleApiCallsBtn").addEventListener("click", function () {
+    var body = document.getElementById("apiCallsBody");
+    var showing = body.style.display !== "none";
+    body.style.display = showing ? "none" : "";
+    document.getElementById("toggleApiCallsBtn").textContent = showing ? "Show" : "Hide";
   });
 
   loadConfigurations();

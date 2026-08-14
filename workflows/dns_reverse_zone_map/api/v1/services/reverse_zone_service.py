@@ -15,6 +15,10 @@ preview per network: every forward HostRecord with `reverseRecord=true` whose ad
 falls inside that network, i.e. "what this network's dynamically-generated reverse zone
 would answer for this address" - computed here from data already collected for issue
 detection, not a second BAM round trip.
+
+Every BAM API call made along the way is recorded by bam_v2_client.LoggingClient and
+returned as `api_calls`, so the page can show the real interaction behind a page load
+instead of it being an opaque black box.
 """
 from . import bam_v2_client, issue_detector, reverse_utils, zone_tree
 
@@ -48,4 +52,5 @@ def build_snapshot(configuration_name: str) -> dict:
     return {
         "tree": zone_tree.build_tree(reverse_zones, networks),
         "issues": issue_detector.detect_all(networks, host_records),
+        "api_calls": client.calls,
     }
