@@ -40,6 +40,12 @@ alongside the "virtual" nodes that only exist via a Network's role assignment.
   interaction with BAM isn't a black box; you can see exactly what was fetched (and, for larger
   configurations, exactly why a refresh took as long as it did — one deployment-role lookup per
   network adds up).
+- **A persistent progress bar** (top of the page) — loading a configuration means one
+  `/networks/{id}/deploymentRoles` call per network plus one `/zones/{id}/resourceRecords` call
+  per forward zone, which can add up on a large configuration. The page streams progress over
+  Server-Sent Events as each of those finishes, so the bar tracks real done/total counts instead
+  of just spinning - and it stays on screen (idle grey → loading blue → done green / error red)
+  rather than disappearing, so a fast load doesn't just look like nothing happened.
 
 No write/fix actions are implemented in this version — see "Limitations."
 
@@ -107,7 +113,8 @@ GET /dns_reverse_zone_map/v1/tree/debug?configuration=<name>
 |---|---|---|
 | `GET` | `/dns_reverse_zone_map/v1/tree/configurations` | List of BAM configurations to choose from |
 | `GET` | `/dns_reverse_zone_map/v1/tree/views?configuration=<name>` | DNS Views under that configuration to choose from |
-| `GET` | `/dns_reverse_zone_map/v1/tree/snapshot?configuration=<name>&view=<name>` | One combined read: the tree + the issue list, scoped to that View |
+| `GET` | `/dns_reverse_zone_map/v1/tree/snapshot?configuration=<name>&view=<name>` | One blocking read: the tree + the issue list, scoped to that View |
+| `GET` | `/dns_reverse_zone_map/v1/tree/snapshot_stream?configuration=<name>&view=<name>` | Same data as `/snapshot`, streamed as Server-Sent Events with progress after each network/zone - what the page itself uses |
 | `GET` | `/dns_reverse_zone_map/v1/tree/debug?configuration=<name>&...` | Raw BAM API responses, for verifying field mappings against your own install |
 
 ## Limitations

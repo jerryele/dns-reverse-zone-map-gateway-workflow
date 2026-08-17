@@ -79,6 +79,12 @@
   h1 { font-size: 23px; font-weight: 400; margin: 0; }
   #footerRow { display: flex; align-items: center; justify-content: flex-end; gap: 12px; flex: none; font-size: 11px; color: #525252; white-space: nowrap; }
   #error { color: #da1e28; margin-bottom: 12px; display: none; }
+  #progressWrap { margin-bottom: 16px; }
+  .progress-bar { height: 8px; background: #e0e0e0; border-radius: 4px; overflow: hidden; }
+  .progress-fill { height: 100%; background: #0072c3; width: 0%; transition: width .2s ease-out; }
+  .progress-fill.done { background: #0e6027; }
+  .progress-fill.error { background: #da1e28; }
+  .progress-label { font-size: 11.5px; color: #525252; margin-top: 4px; }
   button.action { padding: 6px 14px; cursor: pointer; font-family: inherit; font-size: 12.5px; }
 
   .panel { background: #fff; border: 1px solid #e0e0e0; padding: 16px; }
@@ -197,6 +203,10 @@
         </div>
       </div>
       <div id="error"></div>
+      <div id="progressWrap">
+        <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+        <div class="progress-label" id="progressLabel"></div>
+      </div>
 
       <div id="configRow">
         <span class="field-label" style="margin:0;">Configuration</span>
@@ -800,26 +810,84 @@
     });
   }
 
+  var activeEventSource = null;
+
+  function showProgress(percent, label, state) {
+    var fill = document.getElementById("progressFill");
+    fill.style.width = percent + "%";
+    fill.className = "progress-fill" + (state ? " " + state : "");
+    document.getElementById("progressLabel").textContent = label;
+  }
+
+  function progressLabelFor(event) {
+    if (event.phase === "zones") return "Loading zones...";
+    if (event.phase === "start") {
+      return "Preparing (" + event.total + " step" + (event.total === 1 ? "" : "s") + ")...";
+    }
+    if (event.phase === "networks") return "Checking network roles (" + event.done + "/" + event.total + ")";
+    if (event.phase === "host_records") return "Reading host records (" + event.done + "/" + event.total + ")";
+    return "Loading...";
+  }
+
   function loadSnapshot() {
     var configuration = document.getElementById("configSelect").value;
     var view = document.getElementById("viewSelect").value;
     if (!configuration || !view) return;
     showError(null);
-    fetch(API_BASE + "/tree/snapshot?configuration=" + encodeURIComponent(configuration) +
-      "&view=" + encodeURIComponent(view), { credentials: "same-origin" })
-      .then(function (r) { return r.json().then(function (data) { return { ok: r.ok, data: data }; }); })
-      .then(function (result) {
-        if (!result.ok) throw new Error(result.data.error || ("HTTP error"));
-        lastTreeRoot = result.data.tree;
+
+    if (activeEventSource) {
+      activeEventSource.close();
+      activeEventSource = null;
+    }
+    showProgress(0, "Starting...");
+
+    var url = API_BASE + "/tree/snapshot_stream?configuration=" + encodeURIComponent(configuration) +
+      "&view=" + encodeURIComponent(view);
+    var source = new EventSource(url, { withCredentials: true });
+    activeEventSource = source;
+
+    source.onmessage = function (e) {
+      var event;
+      try {
+        event = JSON.parse(e.data);
+      } catch (err) {
+        return;
+      }
+
+      if (event.phase === "error") {
+        showProgress(100, "Error: " + event.message, "error");
+        showError("Failed to load reverse zone data: " + event.message);
+        source.close();
+        activeEventSource = null;
+        return;
+      }
+
+      if (event.phase === "done") {
+        var data = event.result;
+        lastTreeRoot = data.tree;
         renderTree(lastTreeRoot);
         renderTable(lastTreeRoot);
-        renderIssues(result.data.issues);
-        renderApiCalls(result.data.api_calls || []);
-        document.getElementById("lastUpdated").textContent = new Date().toLocaleTimeString();
-      })
-      .catch(function (e) {
-        showError("Failed to load reverse zone data: " + e.message);
-      });
+        renderIssues(data.issues);
+        renderApiCalls(data.api_calls || []);
+        var when = new Date().toLocaleTimeString();
+        document.getElementById("lastUpdated").textContent = when;
+        showProgress(100, "Done - loaded " + event.total + " step" + (event.total === 1 ? "" : "s") + " at " + when, "done");
+        source.close();
+        activeEventSource = null;
+        return;
+      }
+
+      var percent = event.total > 0 ? Math.round((event.done / event.total) * 100) : 0;
+      showProgress(percent, progressLabelFor(event), "");
+    };
+
+    source.onerror = function () {
+      if (source.readyState === EventSource.CLOSED) {
+        showProgress(100, "Connection to server was lost while loading.", "error");
+        showError("Connection to server was lost while loading.");
+        activeEventSource = null;
+      }
+    };
   }
 
   document.getElementById("configSelect").addEventListener("change", loadViews);
@@ -846,6 +914,7 @@
     document.getElementById("toggleApiCallsBtn").textContent = showing ? "Show" : "Hide";
   });
 
+  showProgress(0, "Idle - pick a configuration and view to load.", "");
   loadConfigurations();
 })();
 </script>

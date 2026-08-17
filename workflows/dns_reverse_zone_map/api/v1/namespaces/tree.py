@@ -2,7 +2,9 @@
 REST endpoints the reverse-zone map page polls: the list of BAM configurations to choose
 from, and a single combined tree+issues snapshot for a chosen configuration.
 """
-from flask import request
+import json
+
+from flask import Response, request, stream_with_context
 from flask_restx import Namespace, Resource
 
 from ..services import bam_v2_client, reverse_zone_service
@@ -55,6 +57,41 @@ class Snapshot(Resource):
         except Exception as e:
             return {"error": str(e)}, 500
         return snapshot, 200
+
+
+@tree_ns.route("/snapshot_stream")
+class SnapshotStream(Resource):
+    """
+    ?configuration=<name>&view=<name> - same data as /snapshot, streamed as Server-Sent
+    Events so the page can show real load progress on a configuration with many networks/
+    zones instead of blocking silently. Each event is `data: <json>\\n\\n`; every event has
+    a "phase" key, and the final event (phase="done") carries the full {tree, issues,
+    api_calls} result under "result" - identical to what /snapshot returns directly.
+    """
+
+    def get(self):
+        configuration_name = request.args.get("configuration")
+        view_name = request.args.get("view")
+
+        def to_event(payload):
+            return "data: {}\n\n".format(json.dumps(payload))
+
+        if not configuration_name or not view_name:
+            missing = "configuration" if not configuration_name else "view"
+
+            def error_stream():
+                yield to_event({"phase": "error", "message": "{} query param is required".format(missing)})
+
+            return Response(stream_with_context(error_stream()), mimetype="text/event-stream")
+
+        def event_stream():
+            try:
+                for event in reverse_zone_service.build_snapshot_streaming(configuration_name, view_name):
+                    yield to_event(event)
+            except Exception as e:
+                yield to_event({"phase": "error", "message": str(e)})
+
+        return Response(stream_with_context(event_stream()), mimetype="text/event-stream")
 
 
 @tree_ns.route("/debug")

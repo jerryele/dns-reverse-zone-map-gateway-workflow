@@ -146,8 +146,13 @@ def network_deployment_roles(client, network_id: str) -> list:
     return [r["roleType"] for r in raw if r.get("roleType")]
 
 
-def collect_networks(client, configuration_name: str) -> list:
-    """One dict per network: {"id", "name", "cidr", "role_types", "has_active_role"}."""
+def list_networks_raw(client, configuration_name: str) -> list:
+    """
+    One dict per network with no role check yet: {"id", "name", "cidr"} - split out from
+    collect_networks() so a caller (the streaming snapshot) can report progress on each
+    network's separate deploymentRoles lookup, which is the one-call-per-network step that
+    dominates load time on a configuration with many networks.
+    """
     filter_expr = "configuration.name:eq('{}')".format(configuration_name)
     raw = _paginate(client, "/networks", "id,name,range,type", filter_expr)
     results = []
@@ -156,11 +161,17 @@ def collect_networks(client, configuration_name: str) -> list:
         network_id = network.get("id")
         if not cidr or network_id is None:
             continue
-        role_types = network_deployment_roles(client, str(network_id))
+        results.append({"id": str(network_id), "name": network.get("name") or cidr, "cidr": cidr})
+    return results
+
+
+def collect_networks(client, configuration_name: str) -> list:
+    """One dict per network: {"id", "name", "cidr", "role_types", "has_active_role"}."""
+    results = []
+    for network in list_networks_raw(client, configuration_name):
+        role_types = network_deployment_roles(client, network["id"])
         results.append({
-            "id": str(network_id),
-            "name": network.get("name") or cidr,
-            "cidr": cidr,
+            **network,
             "role_types": role_types,
             "has_active_role": has_active_dns_role(role_types),
         })
