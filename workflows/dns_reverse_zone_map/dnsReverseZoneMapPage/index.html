@@ -811,12 +811,17 @@
   }
 
   var activeEventSource = null;
+  var loadStartTime = null;
 
   function showProgress(percent, label, state) {
     var fill = document.getElementById("progressFill");
     fill.style.width = percent + "%";
     fill.className = "progress-fill" + (state ? " " + state : "");
     document.getElementById("progressLabel").textContent = label;
+  }
+
+  function formatElapsed(ms) {
+    return ms < 1000 ? ms + "ms" : (ms / 1000).toFixed(1) + "s";
   }
 
   function progressLabelFor(event) {
@@ -839,6 +844,7 @@
       activeEventSource.close();
       activeEventSource = null;
     }
+    loadStartTime = Date.now();
     showProgress(0, "Starting...");
 
     var url = API_BASE + "/tree/snapshot_stream?configuration=" + encodeURIComponent(configuration) +
@@ -855,7 +861,8 @@
       }
 
       if (event.phase === "error") {
-        showProgress(100, "Error: " + event.message, "error");
+        var errorElapsed = formatElapsed(Date.now() - loadStartTime);
+        showProgress(100, "Error after " + errorElapsed + ": " + event.message, "error");
         showError("Failed to load reverse zone data: " + event.message);
         source.close();
         activeEventSource = null;
@@ -871,19 +878,23 @@
         renderApiCalls(data.api_calls || []);
         var when = new Date().toLocaleTimeString();
         document.getElementById("lastUpdated").textContent = when;
-        showProgress(100, "Done - loaded " + event.total + " step" + (event.total === 1 ? "" : "s") + " at " + when, "done");
+        var totalElapsed = formatElapsed(Date.now() - loadStartTime);
+        showProgress(100, "Done - loaded " + event.total + " step" + (event.total === 1 ? "" : "s") +
+          " in " + totalElapsed + " (at " + when + ")", "done");
         source.close();
         activeEventSource = null;
         return;
       }
 
       var percent = event.total > 0 ? Math.round((event.done / event.total) * 100) : 0;
-      showProgress(percent, progressLabelFor(event), "");
+      var stepElapsed = formatElapsed(Date.now() - loadStartTime);
+      showProgress(percent, progressLabelFor(event) + " - " + stepElapsed + " elapsed", "");
     };
 
     source.onerror = function () {
       if (source.readyState === EventSource.CLOSED) {
-        showProgress(100, "Connection to server was lost while loading.", "error");
+        var lostElapsed = formatElapsed(Date.now() - loadStartTime);
+        showProgress(100, "Connection to server was lost after " + lostElapsed + ".", "error");
         showError("Connection to server was lost while loading.");
         activeEventSource = null;
       }

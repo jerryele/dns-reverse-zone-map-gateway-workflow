@@ -43,9 +43,10 @@ alongside the "virtual" nodes that only exist via a Network's role assignment.
 - **A persistent progress bar** (top of the page) — loading a configuration means one
   `/networks/{id}/deploymentRoles` call per network plus one `/zones/{id}/resourceRecords` call
   per forward zone, which can add up on a large configuration. The page streams progress over
-  Server-Sent Events as each of those finishes, so the bar tracks real done/total counts instead
-  of just spinning - and it stays on screen (idle grey → loading blue → done green / error red)
-  rather than disappearing, so a fast load doesn't just look like nothing happened.
+  Server-Sent Events as each of those finishes, so the bar tracks real done/total counts and
+  elapsed time instead of just spinning - and it stays on screen (idle grey → loading blue →
+  done green / error red, each labeled with how long it took) rather than disappearing, so a
+  fast load doesn't just look like nothing happened.
 
 No write/fix actions are implemented in this version — see "Limitations."
 
