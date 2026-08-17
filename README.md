@@ -16,9 +16,15 @@ alongside the "virtual" nodes that only exist via a Network's role assignment.
 
 ## What it shows
 
-- **Tree / table view toggle** (top of the main panel) — the same data, two shapes. The tree
-  mirrors a traditional DNS zone browser; the table flattens every network/zone onto one row
-  each, for scanning or sorting at a glance.
+- **Configuration + DNS View selectors** (top of the page) — both are required before anything
+  loads. BAM scopes Zones (and therefore resource records) to a single View each — this is its
+  split-horizon mechanism, so the same zone name can exist independently in more than one View —
+  so every query here is scoped to whichever View you pick, not just the Configuration. Networks
+  are a Configuration-level construct in BAM and aren't View-scoped, so they're unaffected by
+  which View is selected.
+- **Tree / table display toggle** (top of the main panel — not to be confused with the DNS View
+  picker above) — the same data, two shapes. The tree mirrors a traditional DNS zone browser;
+  the table flattens every network/zone onto one row each, for scanning or sorting at a glance.
 - **Per-network PTR preview** — expandable "▸ N PTR" under each network, in both views. BAM
   does not necessarily store a real PTR resource record for a network whose reverse zone is
   generated dynamically from its deployment role (see "Derived, not authoritative" below) — so
@@ -64,8 +70,8 @@ records, some of this may not apply to you — see "Limitations."
      "dns_reverse_zone_map_page": ["all", "admin"]
    }
    ```
-3. Open **DNS Reverse Zone Map** in Gateway's nav, pick a Configuration, and the tree/table
-   loads automatically.
+3. Open **DNS Reverse Zone Map** in Gateway's nav, pick a Configuration and then a DNS View, and
+   the tree/table loads automatically.
 
 No credentials to configure — it reuses the Gateway session's own BAM authentication
 (`g.user.bam_api.v2`, falling back to a hand-built v2 client using the session's auth) the same
@@ -100,7 +106,8 @@ GET /dns_reverse_zone_map/v1/tree/debug?configuration=<name>
 | Method | Path | What |
 |---|---|---|
 | `GET` | `/dns_reverse_zone_map/v1/tree/configurations` | List of BAM configurations to choose from |
-| `GET` | `/dns_reverse_zone_map/v1/tree/snapshot?configuration=<name>` | One combined read: the tree + the issue list |
+| `GET` | `/dns_reverse_zone_map/v1/tree/views?configuration=<name>` | DNS Views under that configuration to choose from |
+| `GET` | `/dns_reverse_zone_map/v1/tree/snapshot?configuration=<name>&view=<name>` | One combined read: the tree + the issue list, scoped to that View |
 | `GET` | `/dns_reverse_zone_map/v1/tree/debug?configuration=<name>&...` | Raw BAM API responses, for verifying field mappings against your own install |
 
 ## Limitations

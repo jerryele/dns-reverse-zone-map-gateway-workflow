@@ -33,6 +33,12 @@ Endpoint/field grounding:
   FORWARDER, ...) are the modern v2 renaming of v1's MASTER/SLAVE/etc, per BlueCat's public
   docs - ACTIVE_DNS_ROLE_TYPES in constants.py is the best-guess "actively serving" subset;
   confirm it against your own BAM's real values (see README).
+- `/views` (+ `configuration.name` filter) - Zones belong to a single View each (split-horizon:
+  the same zone name can independently exist in more than one view), so zone/resourceRecord
+  queries are always scoped to one selected view, not just the configuration - a configuration
+  with more than one View but a `/zones` query scoped to the configuration alone would mix
+  every view's zones into one tree with no way to tell which view a given node came from.
+  Networks are configuration-scoped, not view-scoped, so `collect_networks` is unaffected.
 """
 import time
 
@@ -102,14 +108,27 @@ def list_configuration_names(client) -> list:
     return [c["name"] for c in _paginate(client, "/configurations", "id,name", "") if c.get("name")]
 
 
-def collect_zones(client, configuration_name: str) -> list:
+def list_view_names(client, configuration_name: str) -> list:
     """
-    One dict per Zone (forward and reverse alike): {"id", "absolute_name"}.
+    Views under a configuration - a Zone belongs to exactly one View (BAM's split-horizon
+    mechanism: the same zone name can exist independently in more than one view), so zone/
+    record queries need to be scoped to one view, not just the configuration, or data from
+    every view gets mixed into one tree with no way to tell which view a node came from.
+    """
+    filter_expr = "configuration.name:eq('{}')".format(configuration_name)
+    return [v["name"] for v in _paginate(client, "/views", "id,name", filter_expr) if v.get("name")]
+
+
+def collect_zones(client, configuration_name: str, view_name: str) -> list:
+    """
+    One dict per Zone (forward and reverse alike) in a single View: {"id", "absolute_name"}.
 
     Zones with no usable absoluteName (e.g. the unnamed root zone, or any entity missing
     the field on live data) are skipped - there's no meaningful arpa path to place them at.
     """
-    filter_expr = "configuration.name:eq('{}')".format(configuration_name)
+    filter_expr = "configuration.name:eq('{}') and view.name:eq('{}')".format(
+        configuration_name, view_name
+    )
     raw = _paginate(client, "/zones", "id,absoluteName,type", filter_expr)
     results = []
     for z in raw:

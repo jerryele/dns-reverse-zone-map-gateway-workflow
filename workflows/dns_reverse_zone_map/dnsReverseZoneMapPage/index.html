@@ -86,6 +86,7 @@
 
   #configRow { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
   #configSelect { height: 32px; padding: 0 10px; border: 1px solid #8d8d8d; background: #fff; color: #161616; font-family: inherit; font-size: 12.5px; min-width: 220px; }
+  #viewSelect { height: 32px; padding: 0 10px; border: 1px solid #8d8d8d; background: #fff; color: #161616; font-family: inherit; font-size: 12.5px; min-width: 160px; }
 
   #mainCols { display: flex; gap: 16px; align-items: flex-start; }
   #treePanel { flex: 2 1 0; min-width: 480px; }
@@ -200,6 +201,8 @@
       <div id="configRow">
         <span class="field-label" style="margin:0;">Configuration</span>
         <select id="configSelect"><option value="">Loading...</option></select>
+        <span class="field-label" style="margin:0;">View</span>
+        <select id="viewSelect"><option value="">-</option></select>
       </div>
 
       <div id="mainCols">
@@ -475,10 +478,38 @@
           opt.textContent = name;
           select.appendChild(opt);
         });
-        loadSnapshot();
+        loadViews();
       })
       .catch(function (e) {
         showError("Failed to load configurations: " + e.message);
+      });
+  }
+
+  function loadViews() {
+    var configuration = document.getElementById("configSelect").value;
+    var select = document.getElementById("viewSelect");
+    select.innerHTML = "";
+    if (!configuration) return;
+    fetch(API_BASE + "/tree/views?configuration=" + encodeURIComponent(configuration), { credentials: "same-origin" })
+      .then(function (r) { return r.ok ? r.json() : Promise.reject(new Error("HTTP " + r.status)); })
+      .then(function (data) {
+        var views = data.views || [];
+        if (!views.length) {
+          var opt = document.createElement("option");
+          opt.textContent = "No views found";
+          select.appendChild(opt);
+          return;
+        }
+        views.forEach(function (name) {
+          var opt = document.createElement("option");
+          opt.value = name;
+          opt.textContent = name;
+          select.appendChild(opt);
+        });
+        loadSnapshot();
+      })
+      .catch(function (e) {
+        showError("Failed to load views: " + e.message);
       });
   }
 
@@ -771,9 +802,11 @@
 
   function loadSnapshot() {
     var configuration = document.getElementById("configSelect").value;
-    if (!configuration) return;
+    var view = document.getElementById("viewSelect").value;
+    if (!configuration || !view) return;
     showError(null);
-    fetch(API_BASE + "/tree/snapshot?configuration=" + encodeURIComponent(configuration), { credentials: "same-origin" })
+    fetch(API_BASE + "/tree/snapshot?configuration=" + encodeURIComponent(configuration) +
+      "&view=" + encodeURIComponent(view), { credentials: "same-origin" })
       .then(function (r) { return r.json().then(function (data) { return { ok: r.ok, data: data }; }); })
       .then(function (result) {
         if (!result.ok) throw new Error(result.data.error || ("HTTP error"));
@@ -789,7 +822,8 @@
       });
   }
 
-  document.getElementById("configSelect").addEventListener("change", loadSnapshot);
+  document.getElementById("configSelect").addEventListener("change", loadViews);
+  document.getElementById("viewSelect").addEventListener("change", loadSnapshot);
   document.getElementById("refreshBtn").addEventListener("click", loadSnapshot);
   document.getElementById("expandAllBtn").addEventListener("click", function () { setAllCollapsed(false); });
   document.getElementById("collapseAllBtn").addEventListener("click", function () { setAllCollapsed(true); });

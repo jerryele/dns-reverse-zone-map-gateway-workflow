@@ -20,16 +20,38 @@ class Configurations(Resource):
             return {"error": str(e)}, 500
 
 
-@tree_ns.route("/snapshot")
-class Snapshot(Resource):
-    """?configuration=<name> - one BAM read pass, returns both the tree and the issue list."""
+@tree_ns.route("/views")
+class Views(Resource):
+    """?configuration=<name> - the DNS Views under that configuration to choose from."""
 
     def get(self):
         configuration_name = request.args.get("configuration")
         if not configuration_name:
             return {"error": "configuration query param is required"}, 400
         try:
-            snapshot = reverse_zone_service.build_snapshot(configuration_name)
+            client = bam_v2_client.get_v2_client()
+            return {"views": bam_v2_client.list_view_names(client, configuration_name)}, 200
+        except Exception as e:
+            return {"error": str(e)}, 500
+
+
+@tree_ns.route("/snapshot")
+class Snapshot(Resource):
+    """
+    ?configuration=<name>&view=<name> - one BAM read pass, returns both the tree and the
+    issue list, scoped to a single View (zones/records are per-view in BAM's split-horizon
+    model - see bam_v2_client.py's module docstring for why a view must be chosen).
+    """
+
+    def get(self):
+        configuration_name = request.args.get("configuration")
+        view_name = request.args.get("view")
+        if not configuration_name:
+            return {"error": "configuration query param is required"}, 400
+        if not view_name:
+            return {"error": "view query param is required"}, 400
+        try:
+            snapshot = reverse_zone_service.build_snapshot(configuration_name, view_name)
         except Exception as e:
             return {"error": str(e)}, 500
         return snapshot, 200
@@ -45,9 +67,11 @@ class Debug(Resource):
     ?configuration=<name> (required) - raw samples of /networks and /zones under it.
     &cidr=<x.x.x.x/n> (optional) - also finds that exact network by its `range` and fetches
         its raw /networks/{id}/deploymentRoles, to confirm the real roleType string.
-    &zone=<absoluteName> (optional) - also finds that exact zone and fetches a raw,
-        unfiltered sample of its /resourceRecords, to confirm real HostRecord/PTR field
-        names/values (e.g. `addresses`/`reverseRecord` on hosts, `recordType`/`rdata` on PTR).
+    &zone=<absoluteName> (optional) - also finds that exact zone (add &view=<name> too if the
+        configuration has more than one View and the name is ambiguous across them) and
+        fetches a raw, unfiltered sample of its /resourceRecords, to confirm real
+        HostRecord/PTR field names/values (e.g. `addresses`/`reverseRecord` on hosts,
+        `recordType`/`rdata` on PTR).
     &host=<name> (optional) - looks up that HostRecord by name across the whole configuration
         (top-level /resourceRecords, not zone-scoped) to inspect its raw reverseRecord/
         addresses fields directly, without needing to know which zone it's in.
@@ -64,6 +88,7 @@ class Debug(Resource):
         configuration_name = request.args.get("configuration")
         cidr = request.args.get("cidr")
         zone_name = request.args.get("zone")
+        view_name = request.args.get("view")
         host_name = request.args.get("host")
         if not configuration_name:
             return {"error": "configuration query param is required"}, 400
@@ -100,6 +125,8 @@ class Debug(Resource):
                 zone_filter = "absoluteName:eq('{}') and configuration.name:eq('{}')".format(
                     zone_name, configuration_name
                 )
+                if view_name:
+                    zone_filter += " and view.name:eq('{}')".format(view_name)
                 zone_lookup = client.http_get("/zones", params={"filter": zone_filter})
                 result["zone_lookup"] = zone_lookup
                 zones_found = zone_lookup.get("data", [])

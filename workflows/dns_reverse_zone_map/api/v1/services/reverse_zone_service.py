@@ -19,6 +19,10 @@ detection, not a second BAM round trip.
 Every BAM API call made along the way is recorded by bam_v2_client.LoggingClient and
 returned as `api_calls`, so the page can show the real interaction behind a page load
 instead of it being an opaque black box.
+
+Zones and their resource records are scoped to a single, caller-chosen View (see
+bam_v2_client.py's module docstring for why) - Networks are not, since they're a
+configuration-level construct in BAM, shared across every view.
 """
 from . import bam_v2_client, issue_detector, reverse_utils, zone_tree
 
@@ -34,10 +38,10 @@ def _attach_ptr_previews(networks: list, host_records: list) -> None:
         ]
 
 
-def build_snapshot(configuration_name: str) -> dict:
+def build_snapshot(configuration_name: str, view_name: str) -> dict:
     client = bam_v2_client.get_v2_client()
 
-    all_zones = bam_v2_client.collect_zones(client, configuration_name)
+    all_zones = bam_v2_client.collect_zones(client, configuration_name, view_name)
     reverse_zones = [z for z in all_zones if reverse_utils.is_reverse_zone_name(z["absolute_name"])]
     forward_zones = [z for z in all_zones if not reverse_utils.is_reverse_zone_name(z["absolute_name"])]
 
