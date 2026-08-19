@@ -93,27 +93,29 @@
   #configRow { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
   #configSelect { height: 32px; padding: 0 10px; border: 1px solid #8d8d8d; background: #fff; color: #161616; font-family: inherit; font-size: 12.5px; min-width: 220px; }
   #viewSelect { height: 32px; padding: 0 10px; border: 1px solid #8d8d8d; background: #fff; color: #161616; font-family: inherit; font-size: 12.5px; min-width: 160px; }
+  #tableSearchInput {
+    display: block; width: 100%; box-sizing: border-box; height: 30px; padding: 0 10px;
+    border: 1px solid #8d8d8d; background: #fff; color: #161616;
+    font-family: inherit; font-size: 12.5px; margin-bottom: 10px;
+  }
 
   #mainCols { display: flex; gap: 16px; align-items: flex-start; }
-  #treePanel { flex: 2 1 0; min-width: 480px; }
+  #explorerLayout { display: flex; align-items: flex-start; gap: 16px; flex: 2 1 0; min-width: 480px; }
   #issuesPanel { flex: 1 1 0; min-width: 280px; }
 
   .panel-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
   .panel-header h2 { font-size: 14px; margin: 0; }
   .panel-header .actions { display: flex; align-items: center; gap: 8px; }
 
-  .view-toggle { display: flex; border: 1px solid #8d8d8d; border-radius: 2px; overflow: hidden; }
-  .view-toggle-btn {
-    border: none; background: #fff; color: #161616; padding: 6px 12px;
-    font-family: inherit; font-size: 12.5px; cursor: pointer;
-  }
-  .view-toggle-btn + .view-toggle-btn { border-left: 1px solid #8d8d8d; }
-  .view-toggle-btn.active { background: #0072c3; color: #fff; }
+  #treePanel { flex: 0 0 280px; max-width: 280px; max-height: 300vh; overflow-y: auto; }
+  #tableSection { flex: 1; min-width: 0; overflow-x: auto; }
 
-  #treeRoot, #tableRoot { font-size: 12.5px; max-height: 640px; overflow: auto; }
+  #treeRoot { font-size: 12.5px; }
+  #tableRoot { font-size: 12.5px; max-height: 300vh; overflow: auto; }
   .tree-node { }
-  .tree-row { display: flex; align-items: center; gap: 6px; padding: 3px 4px; border-radius: 2px; cursor: default; }
+  .tree-row { display: flex; align-items: center; gap: 6px; padding: 3px 4px; border-radius: 2px; cursor: pointer; }
   .tree-row:hover { background: #f4f4f4; }
+  .tree-row.selected { background: #edf5ff; }
   .tree-toggle {
     width: 14px; height: 14px; flex: 0 0 auto; border: none; background: transparent;
     cursor: pointer; font-size: 10px; color: #6f6f6f; padding: 0; text-align: center;
@@ -129,9 +131,6 @@
   .badge-role-missing { color: #a15c00; background: #fff3da; }
   .badge-count { color: #525252; background: #f0f0f0; }
 
-  .networks-wrap { margin-left: 32px; margin-bottom: 4px; }
-  .network-row { padding: 2px 4px; }
-  .network-row-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
   .ptr-toggle {
     border: none; background: transparent; cursor: pointer; font-size: 11px;
     color: #00539a; padding: 2px 4px; font-family: inherit; flex: 0 0 auto;
@@ -142,11 +141,12 @@
     max-height: 200px; overflow-y: auto;
   }
   .ptr-row { padding: 1px 0; }
-  .ptr-empty { color: var(--text-muted); font-size: 11.5px; }
 
   table { border-collapse: collapse; width: 100%; max-width: 100%; background: #fff; table-layout: fixed; }
   th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid #e0e0e0; overflow-wrap: break-word; }
   th { font-size: 11.5px; font-weight: 600; color: #525252; }
+  th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+  th.sortable:hover { color: #161616; }
   td { font-size: 12px; vertical-align: top; word-break: break-word; }
   td.mono { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; word-break: break-all; }
 
@@ -213,32 +213,38 @@
         <select id="configSelect"><option value="">Loading...</option></select>
         <span class="field-label" style="margin:0;">View</span>
         <select id="viewSelect"><option value="">-</option></select>
+        <button class="action" id="loadBtn">Load</button>
       </div>
 
       <div id="mainCols">
-        <section class="panel" id="treePanel">
-          <div class="panel-header">
-            <h2 id="treePanelTitle">in-addr.arpa / ip6.arpa tree</h2>
-            <div class="actions">
-              <div class="view-toggle" id="viewToggle">
-                <button type="button" class="view-toggle-btn active" data-view="tree">Tree view</button>
-                <button type="button" class="view-toggle-btn" data-view="table">Table view</button>
+        <div id="explorerLayout">
+          <nav class="panel" id="treePanel">
+            <div class="panel-header">
+              <h2 id="treePanelTitle">in-addr.arpa / ip6.arpa</h2>
+              <div class="actions">
+                <button class="action" id="expandAllBtn">Expand</button>
+                <button class="action" id="collapseAllBtn">Collapse</button>
               </div>
-              <button class="action" id="expandAllBtn">Expand all</button>
-              <button class="action" id="collapseAllBtn">Collapse all</button>
             </div>
-          </div>
-          <p class="hint">
-            <span class="badge badge-zone">Zone</span> = BAM has an explicit reverse Zone object here.
-            <span class="badge badge-role-ok">role OK</span> / <span class="badge badge-role-missing">no role</span>
-            = whether at least one network at this node has an active DNS deployment role.
-            Click "N PTR" under a network to see its address&rarr;host mappings - derived
-            from forward host records with reverse DNS enabled, since this BAM doesn't store
-            PTR records as separate objects for dynamically-generated reverse zones.
-          </p>
-          <div id="treeRoot"></div>
-          <div id="tableRoot" style="display:none;"></div>
-        </section>
+            <p class="hint">
+              <span class="badge badge-zone">Zone</span> = BAM has an explicit reverse Zone
+              object here. Click a node to show its branch's networks/roles/PTR details on the right.
+            </p>
+            <div id="treeRoot"></div>
+          </nav>
+
+          <section class="panel" id="tableSection">
+            <div class="panel-header"><h2>Details</h2></div>
+            <p class="hint">
+              Click "N PTR" under a network to see its address&rarr;host mappings - derived
+              from forward host records with reverse DNS enabled, since this BAM doesn't store
+              PTR records as separate objects for dynamically-generated reverse zones.
+            </p>
+            <div class="field-label" id="tableSelectionLabel" style="margin:0 0 8px;">Showing: everything</div>
+            <input type="text" id="tableSearchInput" placeholder="Search reverse zone, CIDR, network name...">
+            <div id="tableRoot"></div>
+          </section>
+        </div>
 
         <section class="panel" id="issuesPanel">
           <div class="panel-header"><h2>Maintenance issues</h2></div>
@@ -516,7 +522,6 @@
           opt.textContent = name;
           select.appendChild(opt);
         });
-        loadSnapshot();
       })
       .catch(function (e) {
         showError("Failed to load views: " + e.message);
@@ -530,68 +535,19 @@
     return node.children.some(nodeHasContent);
   }
 
-  function roleBadgeForNode(node) {
-    if (!node.networks.length) return "";
-    var anyOk = node.networks.some(function (n) { return n.has_active_role; });
-    var anyMissing = node.networks.some(function (n) { return !n.has_active_role; });
-    var html = "";
-    if (anyOk) html += '<span class="badge badge-role-ok">role OK</span> ';
-    if (anyMissing) html += '<span class="badge badge-role-missing">no role</span> ';
-    return html;
+  var selectedRowEl = null;
+
+  function selectTreeNode(node, ancestorPath, rowEl) {
+    if (selectedRowEl) selectedRowEl.classList.remove("selected");
+    rowEl.classList.add("selected");
+    selectedRowEl = rowEl;
+    renderTable(node, ancestorPath);
   }
 
-  function renderPtrList(ptrRecords) {
-    var wrap = document.createElement("div");
-    wrap.className = "ptr-list";
-    wrap.style.display = "none";
-    if (!ptrRecords.length) {
-      wrap.innerHTML = '<div class="ptr-empty">No hosts with reverse DNS enabled found for this network.</div>';
-      return wrap;
-    }
-    wrap.innerHTML = ptrRecords.map(function (r) {
-      return '<div class="ptr-row">' + escapeHtml(r.address) + " &rarr; " + escapeHtml(r.points_to) + "</div>";
-    }).join("");
-    return wrap;
-  }
-
-  function renderNetworkRow(network) {
-    var count = (network.ptr_records || []).length;
-    var row = document.createElement("div");
-    row.className = "network-row";
-
-    var head = document.createElement("div");
-    head.className = "network-row-head";
-
-    var info = document.createElement("span");
-    var roleHtml = network.has_active_role
-      ? '<span class="badge badge-role-ok">role OK</span>'
-      : '<span class="badge badge-role-missing">no role</span>';
-    info.innerHTML = '<span class="tree-label">' + escapeHtml(network.cidr) + "</span> " +
-      escapeHtml(network.name) + " " + roleHtml;
-    head.appendChild(info);
-
-    var ptrToggle = document.createElement("button");
-    ptrToggle.type = "button";
-    ptrToggle.className = "ptr-toggle";
-    ptrToggle.textContent = "▸ " + count + " PTR";
-    head.appendChild(ptrToggle);
-
-    row.appendChild(head);
-
-    var listWrap = renderPtrList(network.ptr_records || []);
-    row.appendChild(listWrap);
-
-    ptrToggle.addEventListener("click", function () {
-      var showing = listWrap.style.display !== "none";
-      listWrap.style.display = showing ? "none" : "";
-      ptrToggle.textContent = (showing ? "▸ " : "▾ ") + count + " PTR";
-    });
-
-    return row;
-  }
-
-  function renderNode(node, depth) {
+  function renderNode(node, depth, ancestorPath) {
     if (!nodeHasContent(node)) return null;
+
+    var fullPath = ancestorPath.concat([node.label]);
 
     var wrap = document.createElement("div");
     wrap.className = "tree-node";
@@ -612,32 +568,24 @@
     label.textContent = node.label;
     row.appendChild(label);
 
-    var badges = document.createElement("span");
-    var badgeHtml = "";
-    if (node.zone_ids.length) badgeHtml += '<span class="badge badge-zone">Zone</span> ';
-    badgeHtml += roleBadgeForNode(node);
-    if (node.networks.length) {
-      badgeHtml += '<span class="badge badge-count">' + node.networks.length + ' network(s)</span>';
+    if (node.zone_ids.length) {
+      var badges = document.createElement("span");
+      badges.innerHTML = '<span class="badge badge-zone">Zone</span>';
+      row.appendChild(badges);
     }
-    badges.innerHTML = badgeHtml;
-    row.appendChild(badges);
+
+    row.addEventListener("click", function (e) {
+      if (e.target === toggle) return;
+      selectTreeNode(node, ancestorPath, row);
+    });
 
     wrap.appendChild(row);
-
-    if (node.networks.length) {
-      var networksWrap = document.createElement("div");
-      networksWrap.className = "networks-wrap";
-      node.networks.forEach(function (network) {
-        networksWrap.appendChild(renderNetworkRow(network));
-      });
-      wrap.appendChild(networksWrap);
-    }
 
     if (visibleChildren.length) {
       var childrenWrap = document.createElement("div");
       childrenWrap.className = "tree-children" + (depth >= 1 ? " collapsed" : "");
       visibleChildren.forEach(function (child) {
-        var childEl = renderNode(child, depth + 1);
+        var childEl = renderNode(child, depth + 1, fullPath);
         if (childEl) childrenWrap.appendChild(childEl);
       });
       wrap.appendChild(childrenWrap);
@@ -655,7 +603,8 @@
   function renderTree(root) {
     var container = document.getElementById("treeRoot");
     container.innerHTML = "";
-    var el = renderNode(root, 0);
+    selectedRowEl = null;
+    var el = renderNode(root, 0, []);
     container.appendChild(el || document.createTextNode("No reverse DNS data found."));
   }
 
@@ -698,65 +647,116 @@
     return rows;
   }
 
-  function renderTable(root) {
+  var TABLE_COLUMNS = [
+    { key: "zonePath", label: "Reverse zone", width: "18%", cellClass: "mono",
+      value: function (r) { return r.zonePath; } },
+    { key: "hasZone", label: "Zone exists", width: "9%",
+      value: function (r) { return r.hasZone ? 1 : 0; } },
+    { key: "cidr", label: "Network CIDR", width: "12%", cellClass: "mono",
+      value: function (r) { return r.cidr; } },
+    { key: "networkName", label: "Network name", width: "12%",
+      value: function (r) { return r.networkName; } },
+    { key: "hasActiveRole", label: "Role status", width: "14%",
+      value: function (r) { return r.hasActiveRole === null ? -1 : (r.hasActiveRole ? 1 : 0); } },
+    { key: "ptrCount", label: "PTR records", width: "35%", cellClass: "mono",
+      value: function (r) { return r.ptrRecords.length; } },
+  ];
+
+  var currentTableRows = [];
+  var tableSortColumn = null;
+  var tableSortAscending = true;
+  var tableSearchQuery = "";
+
+  function filterAndSortRows(rows) {
+    var query = tableSearchQuery.trim().toLowerCase();
+    var filtered = !query ? rows : rows.filter(function (r) {
+      var ptrText = r.ptrRecords.map(function (p) { return p.address + " " + p.points_to; }).join(" ");
+      var haystack = [r.zonePath, r.cidr, r.networkName, (r.roleTypes || []).join(","), ptrText]
+        .join(" ").toLowerCase();
+      return haystack.indexOf(query) !== -1;
+    });
+    if (tableSortColumn) {
+      var col = TABLE_COLUMNS.filter(function (c) { return c.key === tableSortColumn; })[0];
+      if (col) {
+        filtered = filtered.slice().sort(function (a, b) {
+          var va = col.value(a), vb = col.value(b);
+          if (va < vb) return tableSortAscending ? -1 : 1;
+          if (va > vb) return tableSortAscending ? 1 : -1;
+          return 0;
+        });
+      }
+    }
+    return filtered;
+  }
+
+  function renderRoleCell(row) {
+    if (row.hasActiveRole === null) return "-";
+    if (row.hasActiveRole) {
+      return '<span class="badge badge-role-ok">role OK</span> ' + escapeHtml(row.roleTypes.join(", "));
+    }
+    return '<span class="badge badge-role-missing">no role</span>' +
+      (row.roleTypes.length ? " " + escapeHtml(row.roleTypes.join(", ")) : "");
+  }
+
+  function ptrMatchesQuery(row, query) {
+    if (!query) return false;
+    return row.ptrRecords.some(function (p) {
+      return (p.address + " " + p.points_to).toLowerCase().indexOf(query) !== -1;
+    });
+  }
+
+  function renderPtrCell(row, expanded) {
+    if (!row.ptrRecords.length) return "-";
+    var listHtml = row.ptrRecords.map(function (r) {
+      return '<div class="ptr-row">' + escapeHtml(r.address) + " &rarr; " + escapeHtml(r.points_to) + "</div>";
+    }).join("");
+    var arrow = expanded ? "&#9662; " : "&#9656; ";
+    return '<button type="button" class="ptr-toggle">' + arrow + row.ptrRecords.length + ' PTR</button>' +
+      '<div class="ptr-list" style="' + (expanded ? "" : "display:none;") + '">' + listHtml + "</div>";
+  }
+
+  function renderTableRows() {
     var container = document.getElementById("tableRoot");
-    var rows = flattenRows(root, []);
-    if (!rows.length) {
+    if (!currentTableRows.length) {
       container.innerHTML = '<div class="issue-empty">No reverse DNS data found.</div>';
       return;
     }
-    var html = "<table><thead><tr>" +
-      '<th style="width:15%;">Reverse zone</th>' +
-      '<th style="width:6%;">Zone exists</th>' +
-      '<th style="width:11%;">Network CIDR</th>' +
-      '<th style="width:11%;">Network name</th>' +
-      '<th style="width:12%;">Role status</th>' +
-      "<th>PTR records</th>" +
-      "</tr></thead><tbody>";
+    var rows = filterAndSortRows(currentTableRows);
+    if (!rows.length) {
+      container.innerHTML = '<div class="issue-empty">No rows match "' + escapeHtml(tableSearchQuery) + '".</div>';
+      return;
+    }
+    var headHtml = TABLE_COLUMNS.map(function (col) {
+      var arrow = tableSortColumn === col.key ? (tableSortAscending ? " &#9650;" : " &#9660;") : "";
+      var widthAttr = col.width ? ' style="width:' + col.width + ';"' : "";
+      return '<th' + widthAttr + ' class="sortable" data-col="' + col.key + '">' + col.label + arrow + "</th>";
+    }).join("");
+    var query = tableSearchQuery.trim().toLowerCase();
+    var html = "<table><thead><tr>" + headHtml + "</tr></thead><tbody>";
     rows.forEach(function (row) {
-      var roleCell;
-      if (row.hasActiveRole === null) {
-        roleCell = "-";
-      } else if (row.hasActiveRole) {
-        roleCell = '<span class="badge badge-role-ok">role OK</span> ' + escapeHtml(row.roleTypes.join(", "));
-      } else {
-        roleCell = '<span class="badge badge-role-missing">no role</span>' +
-          (row.roleTypes.length ? " " + escapeHtml(row.roleTypes.join(", ")) : "");
-      }
-      var ptrCell = "-";
-      if (row.ptrRecords.length) {
-        var listHtml = row.ptrRecords.map(function (r) {
-          return '<div class="ptr-row">' + escapeHtml(r.address) + " &rarr; " + escapeHtml(r.points_to) + "</div>";
-        }).join("");
-        ptrCell = '<button type="button" class="ptr-toggle">&#9656; ' + row.ptrRecords.length + ' PTR</button>' +
-          '<div class="ptr-list" style="display:none;">' + listHtml + "</div>";
-      }
       html += "<tr>" +
         '<td class="mono">' + escapeHtml(row.zonePath) + "</td>" +
         "<td>" + (row.hasZone ? '<span class="badge badge-zone">Zone</span>' : "-") + "</td>" +
         '<td class="mono">' + escapeHtml(row.cidr) + "</td>" +
         "<td>" + escapeHtml(row.networkName) + "</td>" +
-        "<td>" + roleCell + "</td>" +
-        '<td class="mono">' + ptrCell + "</td>" +
+        "<td>" + renderRoleCell(row) + "</td>" +
+        '<td class="mono">' + renderPtrCell(row, ptrMatchesQuery(row, query)) + "</td>" +
         "</tr>";
     });
     html += "</tbody></table>";
     container.innerHTML = html;
   }
 
-  var currentView = "tree";
-  var lastTreeRoot = null;
-
-  function setView(view) {
-    currentView = view;
-    document.querySelectorAll(".view-toggle-btn").forEach(function (btn) {
-      btn.classList.toggle("active", btn.getAttribute("data-view") === view);
-    });
-    document.getElementById("treeRoot").style.display = view === "tree" ? "" : "none";
-    document.getElementById("tableRoot").style.display = view === "table" ? "" : "none";
-    document.getElementById("expandAllBtn").style.display = view === "tree" ? "" : "none";
-    document.getElementById("collapseAllBtn").style.display = view === "tree" ? "" : "none";
+  function renderTable(node, ancestorPath) {
+    var isRoot = ancestorPath.length === 0 && node.label === "arpa";
+    var fullPath = ancestorPath.concat([node.label]);
+    document.getElementById("tableSelectionLabel").textContent =
+      "Showing: " + (isRoot ? "everything" : fullPath.slice().reverse().join("."));
+    currentTableRows = flattenRows(node, ancestorPath);
+    renderTableRows();
   }
+
+  var lastTreeRoot = null;
 
   // ---- issues rendering ----
 
@@ -838,7 +838,10 @@
   function loadSnapshot() {
     var configuration = document.getElementById("configSelect").value;
     var view = document.getElementById("viewSelect").value;
-    if (!configuration || !view) return;
+    if (!configuration || !view) {
+      showError("Pick a configuration and a view, then click Load.");
+      return;
+    }
     showError(null);
 
     if (activeEventSource) {
@@ -873,8 +876,12 @@
       if (event.phase === "done") {
         var data = event.result;
         lastTreeRoot = data.tree;
+        tableSortColumn = null;
+        tableSortAscending = true;
+        tableSearchQuery = "";
+        document.getElementById("tableSearchInput").value = "";
         renderTree(lastTreeRoot);
-        renderTable(lastTreeRoot);
+        renderTable(lastTreeRoot, []);
         renderIssues(data.issues);
         renderApiCalls(data.api_calls || []);
         var when = new Date().toLocaleTimeString();
@@ -903,21 +910,31 @@
   }
 
   document.getElementById("configSelect").addEventListener("change", loadViews);
-  document.getElementById("viewSelect").addEventListener("change", loadSnapshot);
+  document.getElementById("loadBtn").addEventListener("click", loadSnapshot);
   document.getElementById("refreshBtn").addEventListener("click", loadSnapshot);
   document.getElementById("expandAllBtn").addEventListener("click", function () { setAllCollapsed(false); });
   document.getElementById("collapseAllBtn").addEventListener("click", function () { setAllCollapsed(true); });
-  document.querySelectorAll(".view-toggle-btn").forEach(function (btn) {
-    btn.addEventListener("click", function () { setView(btn.getAttribute("data-view")); });
-  });
   document.getElementById("tableRoot").addEventListener("click", function (e) {
-    var btn = e.target.closest(".ptr-toggle");
-    if (!btn) return;
-    var list = btn.nextElementSibling;
-    var showing = list.style.display !== "none";
-    list.style.display = showing ? "none" : "";
-    var count = list.querySelectorAll(".ptr-row").length;
-    btn.innerHTML = (showing ? "&#9656; " : "&#9662; ") + count + " PTR";
+    var ptrBtn = e.target.closest(".ptr-toggle");
+    if (ptrBtn) {
+      var list = ptrBtn.nextElementSibling;
+      var showing = list.style.display !== "none";
+      list.style.display = showing ? "none" : "";
+      var count = list.querySelectorAll(".ptr-row").length;
+      ptrBtn.innerHTML = (showing ? "&#9656; " : "&#9662; ") + count + " PTR";
+      return;
+    }
+    var th = e.target.closest("th[data-col]");
+    if (th) {
+      var col = th.getAttribute("data-col");
+      tableSortAscending = tableSortColumn === col ? !tableSortAscending : true;
+      tableSortColumn = col;
+      renderTableRows();
+    }
+  });
+  document.getElementById("tableSearchInput").addEventListener("input", function () {
+    tableSearchQuery = this.value;
+    renderTableRows();
   });
   document.getElementById("toggleApiCallsBtn").addEventListener("click", function () {
     var body = document.getElementById("apiCallsBody");

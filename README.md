@@ -22,14 +22,25 @@ alongside the "virtual" nodes that only exist via a Network's role assignment.
   so every query here is scoped to whichever View you pick, not just the Configuration. Networks
   are a Configuration-level construct in BAM and aren't View-scoped, so they're unaffected by
   which View is selected.
-- **Tree / table display toggle** (top of the main panel — not to be confused with the DNS View
-  picker above) — the same data, two shapes. The tree mirrors a traditional DNS zone browser;
-  the table flattens every network/zone onto one row each, for scanning or sorting at a glance.
-- **Per-network PTR preview** — expandable "▸ N PTR" under each network, in both views. BAM
+- **Explorer/Details split** (main panel, laid out the same way as this Gateway install's own
+  `dhcp_utilization` workflow) — a narrow tree on the left mirrors a traditional DNS zone
+  browser, showing only the arpa hierarchy and whether BAM has an explicit reverse Zone object
+  at each node. Click any node to filter the Details table on the right down to just that
+  branch (every network/zone under it, flattened to one row each); the default, before clicking
+  anything, is the whole tree flattened.
+- **Search + sortable columns** in the Details table — the search box matches against the
+  reverse zone path, CIDR, network name, role types, *and* each network's derived PTR entries
+  (address and hostname), so searching a hostname or IP surfaces the network it belongs to and
+  auto-expands that row's PTR list. Click any column header to sort by it, click again to
+  reverse the direction.
+- **Per-network PTR preview** — expandable "▸ N PTR" per network row in the Details table. BAM
   does not necessarily store a real PTR resource record for a network whose reverse zone is
   generated dynamically from its deployment role (see "Derived, not authoritative" below) — so
   this list is *derived*: every forward Host Record with reverse DNS enabled whose address falls
   in that network, shown as `address → hostname`.
+- **Manual Load button** — picking a Configuration/View only populates the selectors; nothing is
+  queried against BAM until you click **Load**, so switching configurations while exploring
+  doesn't fire off a query you didn't ask for yet.
 - **Maintenance issues** — two read-only checks:
   - **Missing reverse role** — a network with real forward addresses in use, but no active DNS
     deployment role, so nothing in it can ever get a working PTR.
@@ -78,7 +89,7 @@ records, some of this may not apply to you — see "Limitations."
    }
    ```
 3. Open **DNS Reverse Zone Map** in Gateway's nav, pick a Configuration and then a DNS View, and
-   the tree/table loads automatically.
+   click **Load**.
 
 No credentials to configure — it reuses the Gateway session's own BAM authentication
 (`g.user.bam_api.v2`, falling back to a hand-built v2 client using the session's auth) the same
