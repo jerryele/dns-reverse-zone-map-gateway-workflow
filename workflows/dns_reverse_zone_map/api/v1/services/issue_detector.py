@@ -3,6 +3,12 @@ Detects reverse-DNS maintenance issues from already-collected BAM data (see
 bam_v2_client.py) - pure functions, no BAM API calls of their own, so detection logic can
 be tested against fixture data independently of a live Gateway session.
 
+Both checks consume a precomputed address<->network index (see
+reverse_utils.build_address_network_index) rather than each re-matching addresses to
+networks itself - on a configuration with many networks and host records, three
+independent O(networks x records) passes each re-parsing the same CIDRs/addresses was the
+actual cause of a real, reported freeze right after the load's progress bar hit 100%.
+
 Only two categories are implemented, not three. "Orphan PTR" (a stale PTR pointing at a
 forward name that no longer exists) was dropped after live testing against a BAM install
 whose reverse zones are backed purely by a Network's deployment role: the DNS/DHCP server
@@ -18,25 +24,15 @@ guessed at with invented data. See the README's Limitations section - a BAM inst
 explicit/manually-created reverse zones with real static PTR records may behave
 differently, and this check could be revisited there.
 """
-from . import reverse_utils
 
 
-def _normalize_name(name: str) -> str:
-    return (name or "").strip(".").lower()
-
-
-def find_missing_reverse_role(networks: list, host_records: list) -> list:
+def find_missing_reverse_role(networks: list, records_by_network: dict) -> list:
     """Networks with in-use forward addresses but no active DNS deployment role."""
     issues = []
     for network in networks:
         if network["has_active_role"]:
             continue
-        in_use = [
-            address
-            for record in host_records
-            for address in record["addresses"]
-            if reverse_utils.ip_in_network(address, network["cidr"])
-        ]
+        in_use = [entry["address"] for entry in records_by_network.get(network["id"], [])]
         if in_use:
             issues.append({
                 "category": "missing_reverse_role",
@@ -50,7 +46,7 @@ def find_missing_reverse_role(networks: list, host_records: list) -> list:
     return issues
 
 
-def find_missing_or_wrong_ptr(networks: list, host_records: list) -> list:
+def find_missing_or_wrong_ptr(host_records: list, network_id_by_address: dict, network_by_id: dict) -> list:
     """
     Host records with reverseRecord=true whose address falls in a network with no active
     DNS deployment role - the PTR that record is asking for cannot actually be served.
@@ -65,10 +61,11 @@ def find_missing_or_wrong_ptr(networks: list, host_records: list) -> list:
         if not record["reverse_enabled"]:
             continue
         for address in record["addresses"]:
-            network = next(
-                (n for n in networks if reverse_utils.ip_in_network(address, n["cidr"])), None
-            )
-            if network is None or network["has_active_role"]:
+            network_id = network_id_by_address.get(address)
+            if network_id is None:
+                continue
+            network = network_by_id[network_id]
+            if network["has_active_role"]:
                 continue
             issues.append({
                 "category": "missing_or_wrong_ptr",
@@ -80,8 +77,9 @@ def find_missing_or_wrong_ptr(networks: list, host_records: list) -> list:
     return issues
 
 
-def detect_all(networks: list, host_records: list) -> dict:
+def detect_all(networks: list, host_records: list, records_by_network: dict, network_id_by_address: dict) -> dict:
+    network_by_id = {network["id"]: network for network in networks}
     return {
-        "missing_reverse_role": find_missing_reverse_role(networks, host_records),
-        "missing_or_wrong_ptr": find_missing_or_wrong_ptr(networks, host_records),
+        "missing_reverse_role": find_missing_reverse_role(networks, records_by_network),
+        "missing_or_wrong_ptr": find_missing_or_wrong_ptr(host_records, network_id_by_address, network_by_id),
     }

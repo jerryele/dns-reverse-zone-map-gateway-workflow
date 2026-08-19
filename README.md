@@ -135,6 +135,11 @@ GET /dns_reverse_zone_map/v1/tree/debug?configuration=<name>
 - **Large configurations**: every network's deployment roles are fetched with a separate API
   call, and PTR previews are derived from every forward Host Record in the configuration — this
   is fine for typical lab/mid-size environments, but wasn't load-tested against a very large BAM.
+  The address-to-network matching behind PTR previews and issue detection is a single indexed
+  pass (each network/address parsed once), not the three separate re-parsing passes earlier
+  versions did, but it's still a linear scan per address, not a proper interval index — a
+  configuration with a very large number of networks *and* a very large number of host records
+  could still be slow on that step specifically.
 
 ## License
 

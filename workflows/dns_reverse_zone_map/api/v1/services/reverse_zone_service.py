@@ -32,22 +32,23 @@ forward zone's record fetch, for the page's progress bar (see namespaces/tree.py
 from . import bam_v2_client, issue_detector, reverse_utils, zone_tree
 
 
-def _attach_ptr_previews(networks: list, host_records: list) -> None:
+def _attach_ptr_previews(networks: list, records_by_network: dict) -> None:
     for network in networks:
         network["ptr_records"] = [
-            {"address": address, "points_to": record["name"]}
-            for record in host_records
-            if record["reverse_enabled"]
-            for address in record["addresses"]
-            if reverse_utils.ip_in_network(address, network["cidr"])
+            {"address": entry["address"], "points_to": entry["record"]["name"]}
+            for entry in records_by_network.get(network["id"], [])
+            if entry["record"]["reverse_enabled"]
         ]
 
 
 def _assemble_result(client, reverse_zones: list, networks: list, host_records: list) -> dict:
-    _attach_ptr_previews(networks, host_records)
+    records_by_network, network_id_by_address = reverse_utils.build_address_network_index(
+        networks, host_records
+    )
+    _attach_ptr_previews(networks, records_by_network)
     return {
         "tree": zone_tree.build_tree(reverse_zones, networks),
-        "issues": issue_detector.detect_all(networks, host_records),
+        "issues": issue_detector.detect_all(networks, host_records, records_by_network, network_id_by_address),
         "api_calls": client.calls,
     }
 
@@ -108,6 +109,7 @@ def build_snapshot_streaming(configuration_name: str, view_name: str):
         done_steps += 1
         yield {"phase": "host_records", "done": done_steps, "total": total_steps}
 
+    yield {"phase": "finalizing", "done": total_steps, "total": total_steps}
     yield {
         "phase": "done",
         "done": total_steps,

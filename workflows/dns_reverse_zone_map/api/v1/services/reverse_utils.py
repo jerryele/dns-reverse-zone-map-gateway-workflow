@@ -53,3 +53,43 @@ def ip_in_network(ip_address: str, cidr: str) -> bool:
         return ipaddress.ip_address(ip_address) in ipaddress.ip_network(cidr, strict=False)
     except ValueError:
         return False
+
+
+def build_address_network_index(networks: list, host_records: list) -> tuple:
+    """
+    One pass over host records x networks, with every CIDR/address string parsed exactly
+    once (not re-parsed on every comparison), instead of three separate consumers
+    (PTR preview, missing-reverse-role, missing/wrong-PTR) each independently calling
+    ip_in_network() - on a configuration with many networks and host records, the repeated
+    ipaddress parsing (not the O(networks x records) shape itself) was what actually made
+    this step slow, and it ran with no progress reporting, right after the progress bar
+    had already reached 100% from the per-network/per-zone fetch loop - looking exactly
+    like the load had frozen at the very end.
+
+    Returns (records_by_network, network_id_by_address):
+    - records_by_network: {network_id: [{"address", "record"}, ...]} - every host record
+      address that falls inside that network, regardless of reverse_enabled.
+    - network_id_by_address: {address: network_id} - the same matches, keyed the other way,
+      for going straight from one address to its network.
+    """
+    parsed_networks = []
+    for network in networks:
+        try:
+            parsed_networks.append((network, ipaddress.ip_network(network["cidr"], strict=False)))
+        except ValueError:
+            continue
+
+    records_by_network = {network["id"]: [] for network in networks}
+    network_id_by_address = {}
+    for record in host_records:
+        for address in record["addresses"]:
+            try:
+                parsed_address = ipaddress.ip_address(address)
+            except ValueError:
+                continue
+            for network, parsed_cidr in parsed_networks:
+                if parsed_address in parsed_cidr:
+                    records_by_network[network["id"]].append({"address": address, "record": record})
+                    network_id_by_address[address] = network["id"]
+                    break
+    return records_by_network, network_id_by_address

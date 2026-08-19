@@ -831,6 +831,7 @@
     }
     if (event.phase === "networks") return "Checking network roles (" + event.done + "/" + event.total + ")";
     if (event.phase === "host_records") return "Reading host records (" + event.done + "/" + event.total + ")";
+    if (event.phase === "finalizing") return "Matching addresses to networks...";
     return "Loading...";
   }
 
